@@ -1,0 +1,165 @@
+# coding: utf-8
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+ENV["LC_ALL"] = "en_US.UTF-8"
+
+Vagrant.configure(2) do |config|
+  # The most common configuration options are documented and commented below.
+  # For a complete reference, please see the online documentation at
+  # https://docs.vagrantup.com.
+
+  # Every Vagrant development environment requires a box. You can search for
+  # boxes at https://atlas.hashicorp.com/search.
+  config.vm.box = "ju2wheels/SL_CENTOS_LATEST_64"
+
+  # Disable automatic box update checking. If you disable this, then
+  # boxes will only be checked for updates when the user runs
+  # `vagrant box outdated`. This is not recommended.
+  # config.vm.box_check_update = false
+
+  # Create a forwarded port mapping which allows access to a specific port
+  # within the machine from a port on the host machine. In the example below,
+  # accessing "localhost:8080" will access port 80 on the guest machine.
+  config.vm.network "forwarded_port", guest: 8080, host: 8080
+
+  # Create a private network, which allows host-only access to the machine
+  # using a specific IP.
+  # config.vm.network "private_network", ip: "192.168.33.10"
+
+  # Create a public network, which generally matched to bridged network.
+  # Bridged networks make the machine appear as another physical device on
+  # your network.
+  # config.vm.network "public_network"
+
+  config.ssh.username         = 'root'
+  config.ssh.private_key_path = %w(/home/nkrishna/.ssh/slcli)
+  config.ssh.forward_agent    = true
+  config.ssh.forward_x11      = false
+  config.ssh.pty              = true
+
+  config.vm.synced_folder "../hw5", "/root/hw5"
+
+  # config.vm.synced_folder "saltstack/salt", "/src/salt"
+  # config.vm.synced_folder "saltstack/pillar", "/src/pillar"
+  
+  # Provider-specific configuration so you can fine-tune various
+  # backing providers for Vagrant. These expose provider-specific options.
+  #
+  config.vm.provider "softlayer" do |sl|
+    sl.start_cpus       = 8
+    sl.max_memory       = 16384
+    sl.operating_system = 'CENTOS_LATEST_64'
+    sl.disk_capacity    = { 0 => 25, 2 => 100 }
+    sl.ssh_keys         = ['mykey']
+    sl.domain           = "krishnaswami.org"
+    sl.datacenter       = "wdc01"
+    sl.network_speed    = 1000
+  end
+
+  (1..6).each do |i|
+    config.vm.define "slave#{i}" do |slave|
+      slave.vm.network :forwarded_port, guest: 50075, host: 50075+100*i # hdfs datanode UI
+      slave.vm.provider :softlayer do |sl|
+        sl.hostname="slave#{i}"
+      end
+
+    end
+  end
+  
+  #
+  # View the documentation for the provider you are using for more
+  # information on available options.
+
+  # Define a Vagrant Push strategy for pushing to Atlas. Other push strategies
+  # such as FTP and Heroku are also available. See the documentation at
+  # https://docs.vagrantup.com/v2/push/atlas.html for more information.
+  # config.push.define "atlas" do |push|
+  #   push.app = "YOUR_ATLAS_USERNAME/YOUR_APPLICATION_NAME"
+  # end
+
+  # Enable provisioning with a shell script. Additional provisioners such as
+  # Puppet, Chef, Ansible, Salt, and Docker are also available. Please see the
+  # documentation for more information about their specific syntax and use.
+  config.vm.provision "shell", inline: <<-SHELL
+     set -x
+     yum -y install ntp wget java-1.8.0-openjdk-devel epel-release
+     yum -y install python-pip
+     pip install -U mrjob
+
+     # tweak ssh
+     cat  >> /etc/ssh/ssh_config <<EOF
+StrictHostKeyChecking no
+NoHostAuthenticationForLocalhost yes
+ControlMaster auto
+ControlPath ~/.ssh/sockets/%r@%h-%p
+ControlPersist 600
+EOF
+     cp /vagrant/hosts_default /etc/hosts
+     cp /vagrant/ssh-keys/id_ed25519* ~/.ssh/
+     cat /vagrant/ssh-keys/id_ed25519.pub >> ~/.ssh/authorized_keys
+     cat /vagrant/ssh-keys/known_hosts >> ~/.ssh/known_hosts
+     chmod 600 ~/.ssh/{authorized_keys,known_hosts,id*}
+     mkdir -p ~/.ssh/sockets
+     chmod 755 sockets
+
+     # install hadoop
+     wget http://www.us.apache.org/dist/hadoop/common/hadoop-2.7.2/hadoop-2.7.2.tar.gz -O /tmp/hadoop-2.7.2.tar.gz
+     tar -zxf /tmp/hadoop-2.7.2.tar.gz -C /opt
+     # update config
+     cp /vagrant/hadoop_conf/* /opt/hadoop-2.7.2/etc/hadoop/
+     echo export JAVA_HOME=$(readlink /etc/alternatives/java_sdk_1.8.0) > /etc/profile.d/java.sh
+     echo export HADOOP_HOME=/opt/hadoop-2.7.2 > /etc/profile.d/hadoop.sh
+     echo 'export PATH=/opt/hadoop-2.7.2/bin:/opt/hadoop-2.7.2/sbin:$PATH' >> /etc/profile.d/hadoop.sh
+     chmod +x /etc/profile.d/*.sh
+
+     # make user
+     useradd hadoop
+     cp -rp ~/.ssh  ~hadoop/.ssh
+     chown -R hadoop ~hadoop/.ssh
+     chown -R hadoop /opt/hadoop-2.7.2
+
+     #set up hdfs volume
+     if ! grep -q LABEL=hdfs1 /etc/fstab; then
+         echo 'LABEL=hdfs1	/hadoop/hdfs	xfs	defaults,noatime	0	1' >> /etc/fstab
+     fi
+     mkdir -p /hadoop/hdfs
+     chown hadoop /hadoop/hdfs
+     umount -f /hadoop/hdfs
+     mkfs.xfs -L hdfs1 -f /dev/xvdc
+     mount /hadoop/hdfs
+     chown hadoop /hadoop/hdfs
+SHELL
+
+  config.vm.define "master" do |master|
+    master.vm.network :forwarded_port, guest: 8080, host: 8080
+    master.vm.network :forwarded_port, guest: 8042, host: 8042 # yarn nodemgr UI 
+    master.vm.network :forwarded_port, guest: 8088, host: 8088 # yarn rm UI
+    master.vm.network :forwarded_port, guest: 19888, host: 19888 # mapred job history UI
+    master.vm.network :forwarded_port, guest: 50070, host: 50070 # hdfs namenode UI
+    master.vm.network :forwarded_port, guest: 50075, host: 50075 # hdfs datanode UI
+    master.vm.provider :softlayer do |sl|
+      sl.hostname="master"
+    end
+    master.vm.provision "shell", inline: <<-SHELL
+      # set up hdfs
+      set -x
+      hdfs namenode -format -force
+      start-dfs.sh
+      time hdfs dfs -cp  s3a://filtered-5grams/ hdfs:///filtered-5grams
+      hdfs dfs -mkdir -p /mr-history/tmp /mr-history/done /app-logs
+      hdfs dfs -chmod -R 1777 /mr-history/tmp /mr-history/done /app-logs
+SHELL
+    master.vm.provision "shell", run: "always", inline: <<-SHELL
+      # start hadoop
+      set -x
+      start-dfs.sh
+      start-yarn.sh
+      mr-jobhistory-daemon.sh --config $HADOOP_HOME/etc/hadoop start historyserver
+SHELL
+  end
+end

@@ -1,0 +1,9 @@
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+10.108.114.214	master  master.krishnaswami.org  
+10.108.114.219	slave1  slave1.krishnaswami.org  
+10.108.114.196	slave2  slave2.krishnaswami.org  
+10.108.114.248	slave3  slave3.krishnaswami.org  
+10.108.114.206	slave4  slave4.krishnaswami.org  
+10.108.114.201	slave5  slave5.krishnaswami.org  
+10.108.114.222	slave6  slave6.krishnaswami.org  

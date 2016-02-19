@@ -1,0 +1,23 @@
+<configuration>
+  <property> 
+    <name>fs.default.name</name> 
+    <value>hdfs://master:9000/</value> 
+  </property> 
+  <property> 
+    <name>dfs.permissions</name> 
+    <value>false</value> 
+  </property> 
+  <property>
+    <name>hadoop.tmp.dir</name>
+    <value>/tmp</value>
+  </property>
+
+  <property>
+    <name>fs.s3a.access.key</name>
+    <value>AKIAIIOETSE7WOYGNJDQ</value>
+  </property>
+  <property>
+    <name>fs.s3a.secret.key</name>
+    <value>8QvEWR1x9P/NRMRSB4cdRkA+QJ0TaDI1tkElBrXE</value>
+  </property>
+</configuration>
