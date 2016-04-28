@@ -1,0 +1,18 @@
+ET1:c
+ET2:b
+ET3:c
+ET4:a
+ET5:a,b,c
+ET6:a
+ET7:b
+ET8:a,b,c
+ET9:b,c
+ET10:c
+ET11:b
+ET12:a,b,d
+ET13:b
+ET14:d
+ET15:d
+ET16:b
+ET17:n/a -- I got 99 (see notebook)
+ET18:a
